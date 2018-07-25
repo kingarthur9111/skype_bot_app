@@ -1,0 +1,9 @@
+---
+applications:
+- name: skype-bot-rjin
+  path: .
+  domain: mybluemix.net
+  host: skype-bot-rjin
+  memory: 256M
+  disk_quota: 1024M
+  instances: 1

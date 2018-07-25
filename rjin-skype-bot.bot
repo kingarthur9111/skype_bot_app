@@ -1,0 +1,15 @@
+{
+    "name": "rjin-skype-bot",
+    "description": "",
+    "secretKey": "",
+    "services": [
+        {
+            "appId": "",
+            "id": "5a2d31c0-8b61-11e8-8032-79179bdc0376",
+            "type": "endpoint",
+            "appPassword": "",
+            "endpoint": "http://localhost:3978/api/messages",
+            "name": "rjin-skype-bot"
+        }
+    ]
+}
