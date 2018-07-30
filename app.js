@@ -86,7 +86,7 @@ var bot = new builder.UniversalBot(connector, function (session) {
                 response.output.generic.forEach(element => {
                     var responseType = element.response_type;
                     if (responseType == "text") {
-                        var reply = element.text.replace('\n', '\n\n');
+                        var reply = element.text.replace(/\n/g, '\n\n');
                         session.send(reply);
                     }
                     else if (responseType == "option") {
@@ -125,64 +125,67 @@ var bot = new builder.UniversalBot(connector, function (session) {
                     }
                 });
                 // log表示
-                var current_nodeid = response.output.nodes_visited[0];
-                console.log(JSON.stringify(response.context.system._node_output_map, null, 2))
-                var node_keylist = [];
-                for(var k in response.context.system._node_output_map) node_keylist.push(k);
-                console.log(current_nodeid);
-                if (!(node_keylist.includes("node_1_1530584229651")) || response.context.system.branch_exited) {
-                    var params = {
-                        workspace_id: workspace,
-                        page_limit: 100,
-                        sort: '-request_timestamp',
-                        //filter: 'request.context.system._node_output_map_s:*%5C%22' + current_nodeid + '%5C%22%5C%3A%5C%5B0%5C%5D*'
-                    };
-                    conversation.listLogs(params, function (err, response) {
-                        if (err) {
-                            console.error(err);
-                        } else {
-                            var ranking = {};
-                            response.logs.forEach(log => {
-                                var input = log.request.input.text;
-                                if (log.response.intents[0] == undefined) {
-                                    return;
-                                }
-                                var intent = log.response.intents[0].intent;
-                                if (["General_Negative_Feedback", "General_Greetings", "General_Ending", "General_Positive_Feedback", "全部", "General_About_You"].includes(intent)) {
-                                    console.log("out----" + intent);
-                                    return;
-                                }
-                                console.log(intent);
-                                if (!(intent in ranking)) {
-                                    ranking[intent] = 1;
-                                }
-                                else {
-                                    ranking[intent] += 1;
-                                }
-                            });
-                            var items = Object.keys(ranking).map(function (key) {
-                                return [key, ranking[key]];
-                            });
-                            items.sort(function (first, second) {
-                                return second[1] - first[1];
-                            });
-
-                            // Create a new array with only the first 5 items
-                            items = items.slice(0, 5);
-                            //console.log(JSON.stringify(response, null, 2));
-                            var reply = "<i>よくある質問：</i>\n\n";
-                            session.send(reply);
-                            items.forEach(item => {
-                                // 質問サンプルを取得
-                                getIntentExample(item[0], function (example) {
-                                    var reply = ("<i>" + example + "</i>\n\n");
-                                    session.send(reply);
+                var nodes_list_length = response.output.nodes_visited.length;
+                var current_nodeid = response.output.nodes_visited[nodes_list_length - 1];
+                if (current_nodeid == "node_1_1532505891105") {
+                    console.log(JSON.stringify(response.context.system._node_output_map, null, 2))
+                    var node_keylist = [];
+                    for (var k in response.context.system._node_output_map) node_keylist.push(k);
+                    console.log(current_nodeid);
+                    if (!(node_keylist.includes("node_1_1530584229651")) || response.context.system.branch_exited) {
+                        var params = {
+                            workspace_id: workspace,
+                            page_limit: 100,
+                            sort: '-request_timestamp',
+                            //filter: 'request.context.system._node_output_map_s:*%5C%22' + current_nodeid + '%5C%22%5C%3A%5C%5B0%5C%5D*'
+                        };
+                        conversation.listLogs(params, function (err, response) {
+                            if (err) {
+                                console.error(err);
+                            } else {
+                                var ranking = {};
+                                response.logs.forEach(log => {
+                                    var input = log.request.input.text;
+                                    if (log.response.intents[0] == undefined) {
+                                        return;
+                                    }
+                                    var intent = log.response.intents[0].intent;
+                                    if (["RECOMMEND","Hint","General_Negative_Feedback", "General_Greetings", "General_Ending", "General_Positive_Feedback", "全部", "General_About_You"].includes(intent)) {
+                                        console.log("out----" + intent);
+                                        return;
+                                    }
+                                    console.log(intent);
+                                    if (!(intent in ranking)) {
+                                        ranking[intent] = 1;
+                                    }
+                                    else {
+                                        ranking[intent] += 1;
+                                    }
+                                });
+                                var items = Object.keys(ranking).map(function (key) {
+                                    return [key, ranking[key]];
+                                });
+                                items.sort(function (first, second) {
+                                    return second[1] - first[1];
                                 });
 
-                            });
-                        }
-                    });
-                } 
+                                // Create a new array with only the first 5 items
+                                items = items.slice(0, 5);
+                                //console.log(JSON.stringify(response, null, 2));
+                                var reply = "<i>よくある質問：</i>\n\n";
+                                session.send(reply);
+                                items.forEach(item => {
+                                    // 質問サンプルを取得
+                                    getIntentExample(item[0], function (example) {
+                                        var reply = ("<i>" + example + "</i>\n\n");
+                                        session.send(reply);
+                                    });
+
+                                });
+                            }
+                        });
+                    }
+                }
                 conversationContext.watsonContext = response.context;
             }
         });
