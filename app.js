@@ -68,132 +68,30 @@ var bot = new builder.UniversalBot(connector, function (session) {
             });
 
     } else {
-        var payload = {
-            workspace_id: workspace,
-            context: '',
-            input: { text: session.message.text }
-        };
-
-        var conversationContext = findOrCreateContext(session.message.address.conversation.id);
-        if (!conversationContext) conversationContext = {};
-        payload.context = conversationContext.watsonContext;
-
-        conversation.message(payload, function (err, response) {
-            if (err) {
-                session.send(err);
-            } else {
-                console.log(JSON.stringify(response, null, 2));
-                response.output.generic.forEach(element => {
-                    var responseType = element.response_type;
-                    if (responseType == "text") {
-                        var reply = element.text.replace(/\n/g, '\n\n');
-                        session.send(reply);
-                    }
-                    else if (responseType == "option") {
-                        // オプションのレスポンスを表示
-                        if (element.title == "response_data") {
-                            // 問い合わせ・申請手順・情報開示・補足事項を表示
-                            var reply = "";
-                            // []で囲むリンクの部分に＜a＞タグを付与
-                            element.options.forEach(option => {
-                                var value = option.value.input.text;
-                                while (value.includes("[") !== false) {
-                                    var link = value.substring(value.indexOf("[") + 1, value.indexOf("]")).split('|');
-                                    var url = link[0];
-                                    var text = link[1]
-                                    value = value.replace('[', '<a href="');
-                                    value = value.replace('|' + text + ']', '">' + text + "</a>");
-                                }
-                                reply += "<b>" + option.label + "</b>\n\n" + value + "\n\n";
-                            });
-                        }
-                        else {
-                            // その他オプションレスポンスを＜u/i＞でリスト化
-                            if (element.description != undefined && element.description != "") {
-                                var reply = "<u><i>" + element.title + "</i>\n\n" + element.description;
-                            }
-                            else {
-                                var reply = "<u><i>" + element.title + "</i>";
-                            }
-                            element.options.forEach(option => {
-                                reply += ("\n\n<i>" + option.label + "</i>");
-                            });
-                            reply += "</u>";
-                        }
-                        // レスポンスを表示する
-                        session.send(reply);
-                    }
-                });
-                // log表示
-                var nodes_list_length = response.output.nodes_visited.length;
-                var current_nodeid = response.output.nodes_visited[nodes_list_length - 1];
-                if (current_nodeid == "node_1_1532505891105") {
-                    console.log(JSON.stringify(response.context.system._node_output_map, null, 2))
-                    var node_keylist = [];
-                    for (var k in response.context.system._node_output_map) node_keylist.push(k);
-                    console.log(current_nodeid);
-                    if (!(node_keylist.includes("node_1_1530584229651")) || response.context.system.branch_exited) {
-                        var params = {
-                            workspace_id: workspace,
-                            page_limit: 100,
-                            sort: '-request_timestamp',
-                            //filter: 'request.context.system._node_output_map_s:*%5C%22' + current_nodeid + '%5C%22%5C%3A%5C%5B0%5C%5D*'
-                        };
-                        conversation.listLogs(params, function (err, response) {
-                            if (err) {
-                                console.error(err);
-                            } else {
-                                var ranking = {};
-                                response.logs.forEach(log => {
-                                    var input = log.request.input.text;
-                                    if (log.response.intents[0] == undefined) {
-                                        return;
-                                    }
-                                    var intent = log.response.intents[0].intent;
-                                    if (["RECOMMEND","Hint","General_Negative_Feedback", "General_Greetings", "General_Ending", "General_Positive_Feedback", "全部", "General_About_You"].includes(intent)) {
-                                        console.log("out----" + intent);
-                                        return;
-                                    }
-                                    console.log(intent);
-                                    if (!(intent in ranking)) {
-                                        ranking[intent] = 1;
-                                    }
-                                    else {
-                                        ranking[intent] += 1;
-                                    }
-                                });
-                                var items = Object.keys(ranking).map(function (key) {
-                                    return [key, ranking[key]];
-                                });
-                                items.sort(function (first, second) {
-                                    return second[1] - first[1];
-                                });
-
-                                // Create a new array with only the first 5 items
-                                items = items.slice(0, 5);
-                                //console.log(JSON.stringify(response, null, 2));
-                                var reply = "<i>よくある質問：</i>\n\n";
-                                session.send(reply);
-                                items.forEach(item => {
-                                    // 質問サンプルを取得
-                                    getIntentExample(item[0], function (example) {
-                                        var reply = ("<i>" + example + "</i>\n\n");
-                                        session.send(reply);
-                                    });
-
-                                });
-                            }
-                        });
-                    }
-                }
-                conversationContext.watsonContext = response.context;
-            }
-        });
+        convert(session.message.text, session.message.address.conversation.id, session);
     }
 
 });
 
-function getIntentExample(intent, fn){
+bot.on('conversationUpdate', function (activity) {
+    // when user joins conversation, send welcome message
+    var is_show_welcome = false;
+    if (activity.membersAdded) {
+        activity.membersAdded.forEach(function (identity) {
+            if (identity.id !== activity.address.bot.id) {
+                return;
+            }
+            else {
+                is_show_welcome = true;
+            }
+        });
+        if (is_show_welcome) {
+            convert("", activity.address.conversation.id, bot, activity.address);
+        }
+    }
+});
+
+function getIntentExample(intent, fn) {
     var example_param = {
         workspace_id: workspace,
         intent: intent
@@ -202,9 +100,168 @@ function getIntentExample(intent, fn){
         if (err) {
             console.error(err);
         } else {
-            fn(response.examples[Math.floor(Math.random()*response.examples.length)].text);
+            fn(response.examples[Math.floor(Math.random() * response.examples.length)].text);
             console.log(intent);
-            console.log(response.examples[Math.floor(Math.random()*response.examples.length)].text);
+            console.log(response.examples[Math.floor(Math.random() * response.examples.length)].text);
+        }
+    });
+}
+
+function convert(input, conversation_id, sender, address) {
+    address = address || "";
+    var payload = {
+        workspace_id: workspace,
+        context: '',
+        input: {}
+    };
+    if (input !== "") {
+        payload.input = { text: input };
+    }
+    var conversationContext = findOrCreateContext(conversation_id);
+    if (!conversationContext) {
+        conversationContext = {};
+        payload.input = {};
+    }
+    payload.context = conversationContext.watsonContext;
+    conversation.message(payload, function (err, response) {
+        console.log(JSON.stringify(response, null, 2));
+        if (sender instanceof builder.UniversalBot) {
+            var replyaddress = new builder.Message()
+                .address(address);
+        }
+        if (err) {
+            if (replyaddress !== undefined) {
+                replyaddress.text(err);
+                sender.send(replyaddress);
+            } else {
+                sender.send(err);
+            }
+        } else {
+            //console.log(JSON.stringify(response, null, 2));
+            response.output.generic.forEach(element => {
+                var responseType = element.response_type;
+                if (responseType == "text") {
+                    var reply = element.text.replace(/\n/g, '\n\n');
+                    if (replyaddress !== undefined) {
+                        replyaddress.text(reply);
+                        sender.send(replyaddress);
+                    } else {
+                        sender.send(reply);
+                    }
+                }
+                else if (responseType == "option") {
+                    // オプションのレスポンスを表示
+                    if (element.title == "response_data") {
+                        // 問い合わせ・申請手順・情報開示・補足事項を表示
+                        var reply = "";
+                        // []で囲むリンクの部分に＜a＞タグを付与
+                        element.options.forEach(option => {
+                            var value = option.value.input.text;
+                            while (value.includes("[") !== false) {
+                                var link = value.substring(value.indexOf("[") + 1, value.indexOf("]")).split('|');
+                                var url = link[0];
+                                var text = link[1]
+                                value = value.replace('[', '<a href="');
+                                value = value.replace('|' + text + ']', '">' + text + "</a>");
+                            }
+                            reply += "<b>" + option.label + "</b>\n\n" + value + "\n\n";
+                        });
+                    }
+                    else {
+                        // その他オプションレスポンスを＜u/i＞でリスト化
+                        if (element.description != undefined && element.description != "") {
+                            var reply = "<u><i>" + element.title + "</i>\n\n" + element.description;
+                        }
+                        else {
+                            var reply = "<u><i>" + element.title + "</i>";
+                        }
+                        element.options.forEach(option => {
+                            reply += ("\n\n<i>" + option.label + "</i>");
+                        });
+                        reply += "</u>";
+                    }
+                    // レスポンスを表示する
+                    if (replyaddress !== undefined) {
+                        replyaddress.text(reply);
+                        sender.send(replyaddress);
+                    } else {
+                        sender.send(reply);
+                    }
+                }
+            });
+            // log表示
+            var nodes_list_length = response.output.nodes_visited.length;
+            var current_nodeid = response.output.nodes_visited[nodes_list_length - 1];
+            if (current_nodeid == "node_1_1532505891105") {
+                console.log(JSON.stringify(response.context.system._node_output_map, null, 2))
+                var node_keylist = [];
+                for (var k in response.context.system._node_output_map) node_keylist.push(k);
+                console.log(current_nodeid);
+                if (!(node_keylist.includes("node_1_1530584229651")) || response.context.system.branch_exited) {
+                    var params = {
+                        workspace_id: workspace,
+                        page_limit: 100,
+                        sort: '-request_timestamp',
+                        //filter: 'request.context.system._node_output_map_s:*%5C%22' + current_nodeid + '%5C%22%5C%3A%5C%5B0%5C%5D*'
+                    };
+                    conversation.listLogs(params, function (err, response) {
+                        if (err) {
+                            console.error(err);
+                        } else {
+                            var ranking = {};
+                            response.logs.forEach(log => {
+                                var input = log.request.input.text;
+                                if (log.response.intents[0] == undefined) {
+                                    return;
+                                }
+                                var intent = log.response.intents[0].intent;
+                                if (["RECOMMEND", "Hint", "General_Negative_Feedback", "General_Greetings", "General_Ending", "General_Positive_Feedback", "全部", "General_About_You"].includes(intent)) {
+                                    console.log("out----" + intent);
+                                    return;
+                                }
+                                console.log(intent);
+                                if (!(intent in ranking)) {
+                                    ranking[intent] = 1;
+                                }
+                                else {
+                                    ranking[intent] += 1;
+                                }
+                            });
+                            var items = Object.keys(ranking).map(function (key) {
+                                return [key, ranking[key]];
+                            });
+                            items.sort(function (first, second) {
+                                return second[1] - first[1];
+                            });
+
+                            // Create a new array with only the first 5 items
+                            items = items.slice(0, 5);
+                            //console.log(JSON.stringify(response, null, 2));
+                            var reply = "<i>よくある質問：</i>\n\n";
+                            if (replyaddress !== undefined) {
+                                replyaddress.text(reply);
+                                sender.send(replyaddress);
+                            } else {
+                                sender.send(reply);
+                            }
+                            items.forEach(item => {
+                                // 質問サンプルを取得
+                                getIntentExample(item[0], function (example) {
+                                    var reply = ("<i>" + example + "</i>\n\n");
+                                    if (replyaddress !== undefined) {
+                                        replyaddress.text(reply);
+                                        sender.send(replyaddress);
+                                    } else {
+                                        sender.send(reply);
+                                    }
+                                });
+
+                            });
+                        }
+                    });
+                }
+            }
+            conversationContext.watsonContext = response.context;
         }
     });
 }
