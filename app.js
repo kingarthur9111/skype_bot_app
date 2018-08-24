@@ -6,6 +6,7 @@ var restify = require('restify');
 var builder = require('botbuilder');
 var Promise = require('bluebird');
 var request = require('request-promise').defaults({ encoding: null });
+var nodemailer = require('nodemailer');
 var Conversation = require('watson-developer-cloud/assistant/v1'); // watson sdk
 
 require('dotenv').config({ silent: true });
@@ -72,7 +73,7 @@ var bot = new builder.UniversalBot(connector, function (session) {
     }
 
 });
-
+/*
 bot.on('conversationUpdate', function (activity) {
     // when user joins conversation, send welcome message
     var is_show_welcome = false;
@@ -90,7 +91,7 @@ bot.on('conversationUpdate', function (activity) {
         }
     }
 });
-
+*/
 function getIntentExample(intent, fn) {
     var example_param = {
         workspace_id: workspace,
@@ -157,12 +158,14 @@ function convert(input, conversation_id, sender, address) {
                         // []で囲むリンクの部分に＜a＞タグを付与
                         element.options.forEach(option => {
                             var value = option.value.input.text;
-                            while (value.includes("[") !== false) {
-                                var link = value.substring(value.indexOf("[") + 1, value.indexOf("]")).split('|');
-                                var url = link[0];
-                                var text = link[1]
-                                value = value.replace('[', '<a href="');
-                                value = value.replace('|' + text + ']', '">' + text + "</a>");
+                            if ((typeof value) == "string") {
+                                while (value.includes("[") !== false) {
+                                    var link = value.substring(value.indexOf("[") + 1, value.indexOf("]")).split('|');
+                                    var url = link[0];
+                                    var text = link[1]
+                                    value = value.replace('[', '<a href="');
+                                    value = value.replace('|' + text + ']', '">' + text + "</a>");
+                                }
                             }
                             reply += "<b>" + option.label + "</b>\n\n" + value + "\n\n";
                         });
@@ -192,6 +195,7 @@ function convert(input, conversation_id, sender, address) {
             // log表示
             var nodes_list_length = response.output.nodes_visited.length;
             var current_nodeid = response.output.nodes_visited[nodes_list_length - 1];
+            console.log(current_nodeid);
             if (current_nodeid == "node_1_1532505891105") {
                 console.log(JSON.stringify(response.context.system._node_output_map, null, 2))
                 var node_keylist = [];
@@ -261,6 +265,9 @@ function convert(input, conversation_id, sender, address) {
                     });
                 }
             }
+            else if (current_nodeid == "node_93_1535011643571") {
+                sendmail(response.context);
+            }
             conversationContext.watsonContext = response.context;
         }
     });
@@ -299,3 +306,45 @@ var obtainToken = Promise.promisify(connector.getAccessToken.bind(connector));
 var checkRequiresToken = function (message) {
     return message.source === 'skype' || message.source === 'msteams';
 };
+
+var sendmail = function(context) {
+    if (context.to_address === undefined || context.to_address === null || context.to_address === ""){
+        console.log("to address is empty.");
+        return;
+    }
+    var transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: 'kingarthur9111@gmail.com',
+          pass: 'jinrongsheng'
+        }
+      });
+
+      var address = context.to_address;
+      while (address.includes("[") !== false) {
+        address.replace("\\", "");
+      }
+      
+      var text = "";
+      var data = eval(context.mail_text);
+      for (var key in data) {
+        if (data.hasOwnProperty(key)) {
+            text += key + data[key] + "\r\n";
+        }
+      }
+      console.log(text);
+      var mailOptions = {
+        from: 'kingarthur9111@gmail.com',
+        to: address,
+        subject: context.mail_title,
+        text: text
+      };
+      
+      transporter.sendMail(mailOptions, function(error, info){
+        if (error) {
+          console.log(error);
+        } else {
+          console.log('Email sent: ' + info.response);
+        }
+      });
+}
