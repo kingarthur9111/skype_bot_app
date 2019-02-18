@@ -71,3 +71,36 @@ msg.payload.output.generic.forEach(element => {
 });
 msg.payload = reply;
 return msg;
+
+
+
+//get schedule
+var context = msg.payload.context;
+var date = context.date;
+var duration = context.duration;
+var date1_start = null;
+var date2_start = null;
+var date3_start = null;
+var date1_end = null;
+var date2_end = null;
+var date3_end = null;
+if (date.size() == 1) {
+    date1_start = new Date(date[0] + " 9:00:00");
+    date1_end = new Date(date[0] + " 11:00:00");
+
+    date2_start = new Date(date[0] + " 13:00:00");
+    date2_end = new Date(date[0] + " 15:00:00");
+
+    date3_start = new Date(date[0] + " 16:00:00");
+    date3_end = new Date(date[0] + " 18:00:00");
+}
+else if (date.size() == 2) {
+    date1_start = new Date(date[0] + " 9:00:00");
+    date1_end = new Date(date[0] + " 11:00:00");
+
+    date2_start = new Date(date[1] + " 10:00:00");
+    date2_end = new Date(date[1] + " 13:00:00");
+
+    date3_start = new Date(date[1] + " 15:00:00");
+    date3_end = new Date(date[1] + " 17:00:00");
+}

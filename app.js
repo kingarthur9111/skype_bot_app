@@ -8,6 +8,7 @@ var Promise = require('bluebird');
 var request = require('request-promise').defaults({ encoding: null });
 var nodemailer = require('nodemailer');
 var Conversation = require('watson-developer-cloud/assistant/v1'); // watson sdk
+const image2base64 = require('image-to-base64');
 
 require('dotenv').config({ silent: true });
 
@@ -61,7 +62,7 @@ var bot = new builder.UniversalBot(connector, function (session) {
                 var echoImage = new builder.Message(session).text('こちらのファイルで大丈夫でしょうか？').addAttachment({
                     contentType: attachment.contentType,
                     contentUrl: 'data:' + attachment.contentType + ';base64,' + imageBase64Sting,
-                    name: 'Uploaded image'
+                    name: 'Upload image'
                 });
                 session.send(echoImage);
             }).catch(function (err) {
@@ -108,6 +109,14 @@ function getIntentExample(intent, fn) {
     });
 }
 
+const waitFor = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function asyncForEach(array, callback) {
+    for (let index = 0; index < array.length; index++) {
+      await callback(array[index], index, array);
+    }
+}
+
 function convert(input, conversation_id, sender, address) {
     address = address || "";
     var payload = {
@@ -139,59 +148,85 @@ function convert(input, conversation_id, sender, address) {
             }
         } else {
             //console.log(JSON.stringify(response, null, 2));
-            response.output.generic.forEach(element => {
-                var responseType = element.response_type;
-                if (responseType == "text") {
-                    var reply = element.text.replace(/\n/g, '\n\n');
-                    if (replyaddress !== undefined) {
-                        replyaddress.text(reply);
-                        sender.send(replyaddress);
-                    } else {
-                        sender.send(reply);
+            const start = async () => {
+                await asyncForEach(response.output.generic, async (element) => {
+                    var responseType = element.response_type;
+                    if (responseType == "text") {
+                        var reply = element.text.replace(/\n/g, '\n\n');
+                        if (replyaddress !== undefined) {
+                            replyaddress.text(reply);
+                            sender.send(replyaddress);
+                        } else {
+                            sender.send(reply);
+                        }
                     }
-                }
-                else if (responseType == "option") {
-                    // オプションのレスポンスを表示
-                    if (element.title == "response_data") {
-                        // 問い合わせ・申請手順・情報開示・補足事項を表示
-                        var reply = "";
-                        // []で囲むリンクの部分に＜a＞タグを付与
-                        element.options.forEach(option => {
-                            var value = option.value.input.text;
-                            if ((typeof value) == "string") {
-                                while (value.includes("[") !== false) {
-                                    var link = value.substring(value.indexOf("[") + 1, value.indexOf("]")).split('|');
-                                    var url = link[0];
-                                    var text = link[1]
-                                    value = value.replace('[', '<a href="');
-                                    value = value.replace('|' + text + ']', '">' + text + "</a>");
+                    else if (responseType == "option") {
+                        // オプションのレスポンスを表示
+                        if (element.title == "response_data") {
+                            // 問い合わせ・申請手順・情報開示・補足事項を表示
+                            var reply = "";
+                            // []で囲むリンクの部分に＜a＞タグを付与
+                            element.options.forEach(option => {
+                                var value = option.value.input.text;
+                                if ((typeof value) == "string") {
+                                    while (value.includes("[") !== false) {
+                                        var link = value.substring(value.indexOf("[") + 1, value.indexOf("]")).split('|');
+                                        var url = link[0];
+                                        var text = link[1]
+                                        value = value.replace('[', '<a href="');
+                                        value = value.replace('|' + text + ']', '">' + text + "</a>");
+                                    }
                                 }
-                            }
-                            reply += "<b>" + option.label + "</b>\n\n" + value + "\n\n";
-                        });
-                    }
-                    else {
-                        // その他オプションレスポンスを＜u/i＞でリスト化
-                        if (element.description != undefined && element.description != "") {
-                            var reply = "<u><i>" + element.title + "</i>\n\n" + element.description;
+                                reply += "<b>" + option.label + "</b>\n\n" + value + "\n\n";
+                            });
                         }
                         else {
-                            var reply = "<u><i>" + element.title + "</i>";
+                            // その他オプションレスポンスを＜u/i＞でリスト化
+                            if (element.description != undefined && element.description != "") {
+                                var reply = "<u><i>" + element.title + "</i>\n\n" + element.description;
+                            }
+                            else {
+                                var reply = "<u><i>" + element.title + "</i>";
+                            }
+                            element.options.forEach(option => {
+                                reply += ("\n\n<i>" + option.label + "</i>");
+                            });
+                            reply += "</u>";
                         }
-                        element.options.forEach(option => {
-                            reply += ("\n\n<i>" + option.label + "</i>");
-                        });
-                        reply += "</u>";
+                        // レスポンスを表示する
+                        if (replyaddress !== undefined) {
+                            replyaddress.text(reply);
+                            sender.send(replyaddress);
+                        } else {
+                            sender.send(reply);
+                        }
                     }
-                    // レスポンスを表示する
-                    if (replyaddress !== undefined) {
-                        replyaddress.text(reply);
-                        sender.send(replyaddress);
-                    } else {
-                        sender.send(reply);
+                    else if (responseType == "pause") {
+                        if (element.typing) {
+                            sender.sendTyping();
+                        }
+                        await waitFor(element.time);
                     }
-                }
-            });
+                    else if (responseType == "image") {
+                        image2base64(element.source).then(
+                            (response) => {
+                                var echoImage = new builder.Message(address).text(element.title).addAttachment({
+                                    contentType: 'image/jpeg',
+                                    contentUrl: 'data:image/jpeg;base64,' + response,
+                                    name: 'image'
+                                });
+                                sender.send(echoImage);
+                            }
+                        )
+                        .catch(
+                            (error) => {
+                                console.log(error); //Exepection error....
+                            }
+                        )
+                    }
+                });
+            }
+            start();
             // log表示
             var nodes_list_length = response.output.nodes_visited.length;
             var current_nodeid = response.output.nodes_visited[nodes_list_length - 1];
@@ -272,7 +307,6 @@ function convert(input, conversation_id, sender, address) {
         }
     });
 }
-
 function findOrCreateContext(convId) {
     // Let’s see if we already have a session for the user convId
     if (!contexts)

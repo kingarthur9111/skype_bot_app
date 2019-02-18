@@ -5,6 +5,9 @@
     "scripts": {
         "start": "node app.js"
     },
+    "engines": {
+        "node": "10.x"
+    },
     "author": "Vincent Perrin",
     "license": "ISC",
     "description": "",
@@ -17,6 +20,7 @@
         "request": "^2.87.0",
         "request-promise": "^4.2.2",
         "restify": "^7.2.1",
-        "watson-developer-cloud": "^3.7.0"
+        "watson-developer-cloud": "^3.7.0",
+        "image-to-base64": "^2.0.1"
     }
 }

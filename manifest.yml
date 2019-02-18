@@ -1,9 +1,9 @@
 ---
 applications:
-- name: directory-service-bot
+- name: end-year-party
   path: .
   domain: mybluemix.net
-  host: directory-service-bot
+  host: end-year-party
   memory: 1G
   disk_quota: 1024M
   instances: 1
